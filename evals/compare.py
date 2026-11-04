@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from evals.run import row_icon
+from evals.run import is_errored, row_icon
 
 
 def load(path: str) -> dict:
@@ -27,7 +27,7 @@ def main() -> None:
     for case_id in sorted(before.keys() | after.keys()):
         b_row, a_row = before.get(case_id, {}), after.get(case_id, {})
         b, a = b_row.get("passed"), a_row.get("passed")
-        if "error" in b_row.get("result", {}) or "error" in a_row.get("result", {}):
+        if is_errored(b_row) or is_errored(a_row):
             change = "⚠️ errored"  # can't call it fixed or broken if one side never ran
         else:
             change = "🟢 fixed" if (b is False and a) else "🔴 broke" if (b and a is False) else ""
@@ -35,8 +35,8 @@ def main() -> None:
 
     Console().print(table)
     for name, run in [("Before", before), ("After", after)]:
-        errored = sum("error" in r["result"] for r in run.values())
-        scored = [r["passed"] for r in run.values() if r["passed"] is not None and "error" not in r["result"]]
+        errored = sum(is_errored(r) for r in run.values())
+        scored = [r["passed"] for r in run.values() if r["passed"] is not None and not is_errored(r)]
         print(f"{name}: {sum(scored)}/{len(scored)} passed" + (f"  (⚠️ {errored} errored)" if errored else ""))
 
 

@@ -28,10 +28,14 @@ def icon(passed: bool | None) -> str:
     return {True: "✅", False: "❌", None: "➖"}[passed]
 
 
+def is_errored(row: dict) -> bool:
+    """True if the harness couldn't finish grading this case (agent, check or judge failed)."""
+    return row.get("status") == "error" or "error" in row.get("result", {})  # older files lack status
+
+
 def row_icon(row: dict) -> str:
     """Pass column: errors get their own icon so a crash never looks like a verdict."""
-    errored = row.get("status") == "error" or "error" in row.get("result", {})  # older files lack status
-    return "⚠️" if errored else icon(row.get("passed"))
+    return "⚠️" if is_errored(row) else icon(row.get("passed"))
 
 
 def preflight(roles: list[str]) -> None:
@@ -60,16 +64,40 @@ def evaluate(case: dict, use_judge: bool) -> dict:
         # The agent never answered, so there's nothing to grade: skip checks and judge.
         checks = [{**check, "passed": None} for check in case.get("checks", [])]
         return {"case": case, "result": result, "checks": checks, "judge": None,
-                "passed": None, "status": "error"}
+                "passed": None, "status": "error", "error": {"stage": "agent", "message": str(e)}}
 
+    # If a check or the judge raises, keep going (record what did run) but mark the case errored:
+    # a partly graded case could look like a pass when the missing part would have failed it.
+    error = None
     checks = []
     for check in case.get("checks", []):
         fn = CHECKS.get(check["type"])
         if fn is None:
             console.print(f"[yellow]Unknown check type '{check['type']}' in {case['id']}[/yellow]")
-        checks.append({**check, "passed": fn(result, check.get("value")) if fn else None})
+            checks.append({**check, "passed": None})
+            continue
+        try:
+            checks.append({**check, "passed": fn(result, check.get("value"))})
+        except Exception as e:
+            console.print(f"[red]Check error on {case['id']} ({check['type']}): {e}[/red]")
+            checks.append({**check, "passed": None, "error": str(e)})
+            error = error or {"stage": "check", "message": f"{check['type']}: {e}"}
 
-    verdict = judge(case, result) if use_judge else None
+    verdict, judge_error = None, None
+    if use_judge:
+        try:
+            verdict = judge(case, result)
+        except Exception as e:
+            console.print(f"[red]Judge error on {case['id']}: {e}[/red]")
+            judge_error = str(e)
+            error = error or {"stage": "judge", "message": judge_error}
+
+    if error:
+        row = {"case": case, "result": result, "checks": checks, "judge": verdict,
+               "passed": None, "status": "error", "error": error}
+        if judge_error:
+            row["judge_error"] = judge_error  # kept even when a check failed first
+        return row
 
     # A case passes if every check (and the judge) that ran passed. Nothing ran = not scored.
     outcomes = [c["passed"] for c in checks] + [verdict["passed"] if verdict else None]
@@ -79,6 +107,12 @@ def evaluate(case: dict, use_judge: bool) -> dict:
 
     return {"case": case, "result": result, "checks": checks, "judge": verdict,
             "passed": passed, "status": status}
+
+
+def error_stage(row: dict) -> str:
+    """' (judge)' / ' (check)' suffix for the errored list; agent errors are the default, so no suffix."""
+    stage = row.get("error", {}).get("stage", "agent")
+    return "" if stage == "agent" else f" ({stage})"
 
 
 def print_scorecard(rows: list[dict]) -> None:
@@ -91,14 +125,14 @@ def print_scorecard(rows: list[dict]) -> None:
             row["case"]["id"],
             row_icon(row),
             " ".join(icon(c["passed"]) for c in row["checks"]) or "-",
-            f"{verdict['score']}/5" if verdict else "-",
+            "⚠️" if row.get("judge_error") else f"{verdict['score']}/5" if verdict else "-",
             ", ".join(t["name"] for t in row["result"]["tool_calls"]) or "-",
             str(row["result"]["latency_s"]),
         )
     console.print(table)
 
-    errored = [r for r in rows if r["status"] == "error"]
-    scored = [r for r in rows if r["passed"] is not None]
+    errored = [r for r in rows if is_errored(r)]
+    scored = [r for r in rows if r["passed"] is not None and not is_errored(r)]
     passes = sum(r["passed"] for r in scored)
     by_tag = defaultdict(list)
     for r in scored:
@@ -110,7 +144,7 @@ def print_scorecard(rows: list[dict]) -> None:
     if errored:
         console.print(
             f"[red bold]⚠️  {len(errored)} case(s) errored and are excluded from the pass rate: "
-            f"{', '.join(r['case']['id'] for r in errored)}[/red bold]"
+            + ", ".join(f"{r['case']['id']}{error_stage(r)}" for r in errored) + "[/red bold]"
         )
     console.print("By tag: " + (", ".join(f"{t} {sum(v)}/{len(v)}" for t, v in sorted(by_tag.items())) or "-"))
     console.print(
@@ -141,7 +175,7 @@ def main() -> None:
     print_scorecard(rows)
 
     # A run with errors isn't comparable to a clean one, so its filename says so.
-    errored = any(r["status"] == "error" for r in rows)
+    errored = any(is_errored(r) for r in rows)
     suffix = "-ERRORS" if errored else ""
     out = ROOT / "results" / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}{suffix}.jsonl"
     out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")

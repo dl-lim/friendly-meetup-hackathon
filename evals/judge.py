@@ -53,11 +53,8 @@ def judge(case: dict, result: dict) -> dict | None:
         },
     ]
 
-    try:
-        data = _parse(_complete(client, model, messages))
-        score = max(1, min(5, int(data["score"])))
-        return {"score": score, "passed": score >= PASS_SCORE, "reason": str(data.get("reason", ""))}
-    except Exception as e:
-        # passed=None means "not scored", so a broken judge never fails a case silently;
-        # the error is still saved to results/ for inspection.
-        return {"score": None, "passed": None, "reason": f"judge error: {e}"}
+    # Let failures (API errors, unparseable JSON, missing "score") raise: evals.run records the
+    # case as status "error" (stage "judge") instead of grading it on the checks alone.
+    data = _parse(_complete(client, model, messages))
+    score = max(1, min(5, int(data["score"])))
+    return {"score": score, "passed": score >= PASS_SCORE, "reason": str(data.get("reason", ""))}
