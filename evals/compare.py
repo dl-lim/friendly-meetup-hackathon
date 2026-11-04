@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from evals.run import icon
+from evals.run import row_icon
 
 
 def load(path: str) -> dict:
@@ -25,15 +25,19 @@ def main() -> None:
         table.add_column(column)
 
     for case_id in sorted(before.keys() | after.keys()):
-        b = before.get(case_id, {}).get("passed")
-        a = after.get(case_id, {}).get("passed")
-        change = "🟢 fixed" if (b is False and a) else "🔴 broke" if (b and a is False) else ""
-        table.add_row(case_id, icon(b), icon(a), change)
+        b_row, a_row = before.get(case_id, {}), after.get(case_id, {})
+        b, a = b_row.get("passed"), a_row.get("passed")
+        if "error" in b_row.get("result", {}) or "error" in a_row.get("result", {}):
+            change = "⚠️ errored"  # can't call it fixed or broken if one side never ran
+        else:
+            change = "🟢 fixed" if (b is False and a) else "🔴 broke" if (b and a is False) else ""
+        table.add_row(case_id, row_icon(b_row), row_icon(a_row), change)
 
     Console().print(table)
     for name, run in [("Before", before), ("After", after)]:
-        scored = [r["passed"] for r in run.values() if r["passed"] is not None]
-        print(f"{name}: {sum(scored)}/{len(scored)} passed")
+        errored = sum("error" in r["result"] for r in run.values())
+        scored = [r["passed"] for r in run.values() if r["passed"] is not None and "error" not in r["result"]]
+        print(f"{name}: {sum(scored)}/{len(scored)} passed" + (f"  (⚠️ {errored} errored)" if errored else ""))
 
 
 if __name__ == "__main__":

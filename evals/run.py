@@ -7,6 +7,7 @@
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from rich.console import Console
 from rich.table import Table
 
 from agent.agent import run_agent
+from agent.llm import client_for
 from evals.checks import CHECKS
 from evals.judge import judge
 
@@ -26,12 +28,39 @@ def icon(passed: bool | None) -> str:
     return {True: "✅", False: "❌", None: "➖"}[passed]
 
 
+def row_icon(row: dict) -> str:
+    """Pass column: errors get their own icon so a crash never looks like a verdict."""
+    errored = row.get("status") == "error" or "error" in row.get("result", {})  # older files lack status
+    return "⚠️" if errored else icon(row.get("passed"))
+
+
+def preflight(roles: list[str]) -> None:
+    """Make one tiny call per model so a missing model or bad key stops the run before it starts."""
+    for role in roles:
+        try:
+            client, model = client_for(role)
+            client.chat.completions.create(model=model, messages=[{"role": "user", "content": "Reply OK."}])
+        except Exception as e:
+            console.print(f"[red bold]Preflight failed for {role} model: {e}[/red bold]")
+            console.print(
+                f"Check {role}_BASE_URL / {role}_MODEL / {role}_API_KEY in .env. "
+                "Local Ollama models: run scripts/pull-models.sh"
+                + (".  Or skip the judge with --no-judge." if role == "JUDGE" else ".")
+            )
+            sys.exit(2)
+        console.print(f"[green]✓ {role} model reachable: {model}[/green]")
+
+
 def evaluate(case: dict, use_judge: bool) -> dict:
     try:
         result = run_agent(case["input"])
     except Exception as e:
         result = {"answer": "", "tool_calls": [], "latency_s": 0, "tokens": 0, "error": str(e)}
         console.print(f"[red]Agent error on {case['id']}: {e}[/red]")
+        # The agent never answered, so there's nothing to grade: skip checks and judge.
+        checks = [{**check, "passed": None} for check in case.get("checks", [])]
+        return {"case": case, "result": result, "checks": checks, "judge": None,
+                "passed": None, "status": "error"}
 
     checks = []
     for check in case.get("checks", []):
@@ -45,9 +74,11 @@ def evaluate(case: dict, use_judge: bool) -> dict:
     # A case passes if every check (and the judge) that ran passed. Nothing ran = not scored.
     outcomes = [c["passed"] for c in checks] + [verdict["passed"] if verdict else None]
     scored = [o for o in outcomes if o is not None]
-    passed = False if "error" in result else (all(scored) if scored else None)
+    passed = all(scored) if scored else None
+    status = {True: "pass", False: "fail", None: "unscored"}[passed]
 
-    return {"case": case, "result": result, "checks": checks, "judge": verdict, "passed": passed}
+    return {"case": case, "result": result, "checks": checks, "judge": verdict,
+            "passed": passed, "status": status}
 
 
 def print_scorecard(rows: list[dict]) -> None:
@@ -58,7 +89,7 @@ def print_scorecard(rows: list[dict]) -> None:
         verdict = row["judge"]
         table.add_row(
             row["case"]["id"],
-            icon(row["passed"]),
+            row_icon(row),
             " ".join(icon(c["passed"]) for c in row["checks"]) or "-",
             f"{verdict['score']}/5" if verdict else "-",
             ", ".join(t["name"] for t in row["result"]["tool_calls"]) or "-",
@@ -66,6 +97,7 @@ def print_scorecard(rows: list[dict]) -> None:
         )
     console.print(table)
 
+    errored = [r for r in rows if r["status"] == "error"]
     scored = [r for r in rows if r["passed"] is not None]
     passes = sum(r["passed"] for r in scored)
     by_tag = defaultdict(list)
@@ -73,8 +105,14 @@ def print_scorecard(rows: list[dict]) -> None:
         for tag in r["case"].get("tags", []):
             by_tag[tag].append(r["passed"])
 
-    console.print(f"[bold]Pass rate: {passes}/{len(scored)}[/bold]  (not scored: {len(rows) - len(scored)})")
-    console.print("By tag: " + ", ".join(f"{t} {sum(v)}/{len(v)}" for t, v in sorted(by_tag.items())))
+    unscored = len(rows) - len(scored) - len(errored)
+    console.print(f"[bold]Pass rate: {passes}/{len(scored)}[/bold]  (not scored: {unscored}, errored: {len(errored)})")
+    if errored:
+        console.print(
+            f"[red bold]⚠️  {len(errored)} case(s) errored and are excluded from the pass rate: "
+            f"{', '.join(r['case']['id'] for r in errored)}[/red bold]"
+        )
+    console.print("By tag: " + (", ".join(f"{t} {sum(v)}/{len(v)}" for t, v in sorted(by_tag.items())) or "-"))
     console.print(
         f"Avg latency: {sum(r['result']['latency_s'] for r in rows) / len(rows):.1f}s  "
         f"Total tokens: {sum(r['result']['tokens'] for r in rows)}"
@@ -93,6 +131,8 @@ def main() -> None:
     if args.only:
         cases = [c for c in cases if c["id"] == args.only]
 
+    preflight(["AGENT"] + ([] if args.no_judge else ["JUDGE"]))
+
     rows = []
     for case in cases:
         with console.status(f"Running {case['id']}..."):
@@ -100,9 +140,14 @@ def main() -> None:
 
     print_scorecard(rows)
 
-    out = ROOT / "results" / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}.jsonl"
+    # A run with errors isn't comparable to a clean one, so its filename says so.
+    errored = any(r["status"] == "error" for r in rows)
+    suffix = "-ERRORS" if errored else ""
+    out = ROOT / "results" / f"{datetime.now():%Y%m%d-%H%M%S}-{args.label}{suffix}.jsonl"
     out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
     console.print(f"Saved: {out.relative_to(ROOT)}")
+    if errored:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
