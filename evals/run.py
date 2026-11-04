@@ -135,9 +135,11 @@ def print_scorecard(rows: list[dict]) -> None:
     scored = [r for r in rows if r["passed"] is not None and not is_errored(r)]
     passes = sum(r["passed"] for r in scored)
     by_tag = defaultdict(list)
+    by_category = defaultdict(list)
     for r in scored:
         for tag in r["case"].get("tags", []):
             by_tag[tag].append(r["passed"])
+        by_category[r["case"].get("category", "uncategorised")].append(r["passed"])
 
     unscored = len(rows) - len(scored) - len(errored)
     console.print(f"[bold]Pass rate: {passes}/{len(scored)}[/bold]  (not scored: {unscored}, errored: {len(errored)})")
@@ -146,6 +148,7 @@ def print_scorecard(rows: list[dict]) -> None:
             f"[red bold]⚠️  {len(errored)} case(s) errored and are excluded from the pass rate: "
             + ", ".join(f"{r['case']['id']}{error_stage(r)}" for r in errored) + "[/red bold]"
         )
+    console.print("By category: " + (", ".join(f"{c} {sum(v)}/{len(v)}" for c, v in sorted(by_category.items())) or "-"))
     console.print("By tag: " + (", ".join(f"{t} {sum(v)}/{len(v)}" for t, v in sorted(by_tag.items())) or "-"))
     console.print(
         f"Avg latency: {sum(r['result']['latency_s'] for r in rows) / len(rows):.1f}s  "
