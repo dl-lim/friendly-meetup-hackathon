@@ -32,8 +32,11 @@ def tool_called_with(result: dict, value: str) -> bool:
     # passes when the named tool was called with that exact key/value in its args.
     tool_name, _, kv = value.partition(":")
     key, _, expected = kv.partition("=")
+    # args is a raw string when the model emitted malformed JSON (see agent.py) — treat as not matched.
     return any(
-        call["name"] == tool_name and str(call["args"].get(key)) == expected
+        call["name"] == tool_name
+        and isinstance(call["args"], dict)
+        and str(call["args"].get(key)) == expected
         for call in result["tool_calls"]
     )
 
