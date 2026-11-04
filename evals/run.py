@@ -128,12 +128,14 @@ def error_stage(row: dict) -> str:
 
 def print_scorecard(rows: list[dict]) -> None:
     table = Table(title="Scorecard")
-    for column in ["Case", "Pass", "Checks", "Judge", "Tools used", "Secs"]:
+    for column in ["Case", "Category", "Pass", "Checks", "Judge", "Tools used", "Secs"]:
         table.add_column(column)
-    for row in rows:
+    # Group rows by category (uncategorised last); sorted() is stable, so file order holds within a group.
+    for row in sorted(rows, key=lambda r: (not r["case"].get("category"), r["case"].get("category") or "")):
         verdict = row["judge"]
         table.add_row(
             row["case"]["id"],
+            row["case"].get("category") or "-",
             row_icon(row),
             " ".join(icon(c["passed"]) for c in row["checks"]) or "-",
             "⚠️" if row.get("judge_error") else f"{verdict['score']}/5" if verdict else "-",
