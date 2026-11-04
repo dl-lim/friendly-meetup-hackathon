@@ -1,0 +1,190 @@
+{
+  "customers": [
+    {
+      "customer_id": "CUST001",
+      "company_name": "TechStart Inc",
+      "industry": "SaaS",
+      "risk_profile": "startup",
+      "contact_email": "security@techstart.com",
+      "preferred_channel": "email"
+    },
+    {
+      "customer_id": "CUST002",
+      "company_name": "Global Finance Corp",
+      "industry": "Financial Services",
+      "risk_profile": "high-value",
+      "contact_email": "infosec@globalfinance.com",
+      "preferred_channel": "email"
+    },
+    {
+      "customer_id": "CUST003",
+      "company_name": "Local Retail Chain",
+      "industry": "Retail",
+      "risk_profile": "enterprise",
+      "contact_email": "it@localretail.com",
+      "preferred_channel": "portal"
+    }
+  ],
+  "assets": [
+    {
+      "asset_id": "ASSET001",
+      "customer_id": "CUST001",
+      "type": "ip_address",
+      "value": "203.0.113.45",
+      "status": "active",
+      "metadata": {
+        "geolocation": "US-West",
+        "hosting_provider": "AWS"
+      }
+    },
+    {
+      "asset_id": "ASSET002",
+      "customer_id": "CUST001",
+      "type": "domain",
+      "value": "api.techstart.com",
+      "status": "active",
+      "metadata": {
+        "geolocation": "US-East",
+        "hosting_provider": "Cloudflare"
+      }
+    },
+    {
+      "asset_id": "ASSET003",
+      "customer_id": "CUST002",
+      "type": "ip_address",
+      "value": "198.51.100.123",
+      "status": "active",
+      "metadata": {
+        "geolocation": "EU",
+        "hosting_provider": "Azure"
+      }
+    },
+    {
+      "asset_id": "ASSET004",
+      "customer_id": "CUST002",
+      "type": "domain",
+      "value": "secure.globalfinance.com",
+      "status": "active",
+      "metadata": {
+        "geolocation": "US-East",
+        "hosting_provider": "On-premise"
+      }
+    },
+    {
+      "asset_id": "ASSET005",
+      "customer_id": "CUST003",
+      "type": "ip_address",
+      "value": "192.0.2.78",
+      "status": "active",
+      "metadata": {
+        "geolocation": "US-Central",
+        "hosting_provider": "Local ISP"
+      }
+    }
+  ],
+  "risk_findings": [
+    {
+      "finding_id": "FIND001",
+      "asset_id": "ASSET001",
+      "customer_id": "CUST001",
+      "type": "exposed_service",
+      "subtype": "open_rdp",
+      "severity": "High",
+      "confidence": "High",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "details": {
+        "description": "Remote Desktop Protocol (RDP) service exposed to internet on port 3389",
+        "port": 3389,
+        "protocol": "TCP",
+        "recommendation": "Restrict RDP access to VPN or specific IP ranges"
+      }
+    },
+    {
+      "finding_id": "FIND002",
+      "asset_id": "ASSET002",
+      "customer_id": "CUST001",
+      "type": "cve",
+      "subtype": "vulnerability",
+      "severity": "Critical",
+      "confidence": "High",
+      "timestamp": "2024-01-15T11:15:00Z",
+      "details": {
+        "cve_id": "CVE-2024-1234",
+        "cvss_score": 9.8,
+        "description": "Remote code execution vulnerability in web framework",
+        "affected_version": "v2.1.0",
+        "fixed_version": "v2.2.1",
+        "is_kev": true,
+        "kev_date": "2024-01-10"
+      }
+    },
+    {
+      "finding_id": "FIND003",
+      "asset_id": "ASSET003",
+      "customer_id": "CUST002",
+      "type": "cve",
+      "subtype": "vulnerability",
+      "severity": "Medium",
+      "confidence": "Medium",
+      "timestamp": "2024-01-15T12:00:00Z",
+      "details": {
+        "cve_id": "CVE-2024-5678",
+        "cvss_score": 5.3,
+        "description": "Information disclosure vulnerability",
+        "affected_version": "v1.5.0",
+        "fixed_version": "v1.5.2",
+        "is_kev": false
+      }
+    },
+    {
+      "finding_id": "FIND004",
+      "asset_id": "ASSET004",
+      "customer_id": "CUST002",
+      "type": "misconfiguration",
+      "subtype": "weak_tls",
+      "severity": "Medium",
+      "confidence": "High",
+      "timestamp": "2024-01-15T13:20:00Z",
+      "details": {
+        "description": "TLS 1.0 and 1.1 enabled, should use TLS 1.2+",
+        "current_tls_versions": ["TLS 1.0", "TLS 1.1", "TLS 1.2"],
+        "recommendation": "Disable TLS 1.0 and 1.1, enforce TLS 1.2 or higher"
+      }
+    },
+    {
+      "finding_id": "FIND005",
+      "asset_id": "ASSET005",
+      "customer_id": "CUST003",
+      "type": "exposed_service",
+      "subtype": "open_smb",
+      "severity": "High",
+      "confidence": "Low",
+      "timestamp": "2024-01-15T14:00:00Z",
+      "details": {
+        "description": "SMB service potentially exposed, requires further investigation",
+        "port": 445,
+        "protocol": "TCP",
+        "note": "May be behind firewall, verification needed"
+      }
+    },
+    {
+      "finding_id": "FIND006",
+      "asset_id": "ASSET001",
+      "customer_id": "CUST001",
+      "type": "cve",
+      "subtype": "vulnerability",
+      "severity": "Low",
+      "confidence": "High",
+      "timestamp": "2024-01-15T14:30:00Z",
+      "details": {
+        "cve_id": "CVE-2024-9999",
+        "cvss_score": 3.1,
+        "description": "Minor information leak in error messages",
+        "affected_version": "v3.0.0",
+        "fixed_version": "v3.0.1",
+        "is_kev": false
+      }
+    }
+  ]
+}
+
