@@ -8,11 +8,22 @@
 import argparse
 import json
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from agent.agent import run_agent
@@ -171,9 +182,27 @@ def main() -> None:
     preflight(["AGENT"] + ([] if args.no_judge else ["JUDGE"]))
 
     rows = []
-    for case in cases:
-        with console.status(f"Running {case['id']}..."):
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TextColumn("ETA"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Evaluating…", total=len(cases))
+        for case in cases:
+            progress.update(task, description=f"[bold blue]{case['id']}")
+            t0 = time.monotonic()
             rows.append(evaluate(case, use_judge=not args.no_judge))
+            elapsed = time.monotonic() - t0
+            progress.advance(task)
+            remaining = len(cases) - len(rows)
+            progress.update(task, description=f"[bold blue]{case['id']} ({elapsed:.1f}s) — {remaining} left")
 
     print_scorecard(rows)
 
