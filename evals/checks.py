@@ -61,6 +61,13 @@ def matches_regex(result: dict, value: str) -> bool:
     return bool(re.search(value, result["answer"]))
 
 
+def not_matches_regex(result: dict, value: str) -> bool:
+    # value: a regex pattern. Passes when the pattern does NOT appear in the answer.
+    # For "must not claim to have done X" checks, where not_contains is too literal.
+    # Add (?i) at the start of the pattern for case-insensitive matching.
+    return not re.search(value, result["answer"])
+
+
 CHECKS = {
     "contains": contains,
     "not_contains": not_contains,
@@ -70,4 +77,5 @@ CHECKS = {
     "max_words": max_words,
     "no_tools": no_tools,
     "matches_regex": matches_regex,
+    "not_matches_regex": not_matches_regex,
 }
