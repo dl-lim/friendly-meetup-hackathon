@@ -8,7 +8,7 @@ The key goal here is to learn, work with great people, and have fun.
 
 This repository is for the Analytics project.
 
-Please refer to https://github.com/dl-lim/friendly-hackathon-agentic-ai if you are after the Agentic AI Project.
+Please refer to https://github.com/dl-lim/friendly-meetup-hackathon/tree/2026-01-agentic-ai if you are after the Agentic AI Project.
 
 When you have completed your work, open a PR to the repository.
 
